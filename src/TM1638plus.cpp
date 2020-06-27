@@ -14,18 +14,16 @@ TM1638plus::TM1638plus(uint8_t strobe, uint8_t clock, uint8_t data) {
   _STROBE_IO = strobe;
   _DATA_IO = data;
   _CLOCK_IO = clock;
-  pinMode(strobe, OUTPUT);
-  pinMode(clock, OUTPUT);
-  pinMode(data, OUTPUT);
+  DDRD |= B11010000;//DDRD |= (1 << data) | (1 << clock) | (1 << strobe);
+  PORTD &= B00101111;//PORTD &= (~(1 << data)) & (~(1 << clock)) & (~(1 << strobe));
   sendCommand(ACTIVATE_TM);
   brightness(DEFAULT_BRIGHTNESS);
   reset();
 }
 
 void TM1638plus::displayBegin() {
-  pinMode(_STROBE_IO , OUTPUT);
-  pinMode(_DATA_IO, OUTPUT);
-  pinMode(_CLOCK_IO , OUTPUT);
+  DDRD |= B11010000;//DDRD |= (1 << _DATA_IO) | (1 << _CLOCK_IO) | (1 << _STROBE_IO);
+  PORTD &= B00101111;//PORTD &= (~(1 << _DATA_IO)) & (~(1 << _CLOCK_IO)) & (~(1 << _STROBE_IO));
   sendCommand(ACTIVATE_TM);
   brightness(DEFAULT_BRIGHTNESS);
   reset();
@@ -33,30 +31,31 @@ void TM1638plus::displayBegin() {
 
 void TM1638plus::sendCommand(uint8_t value)
 {
-  digitalWrite(_STROBE_IO, LOW);
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
-  digitalWrite(_STROBE_IO, HIGH);
+  PORTD &= B11101111;//PORTD &= ~(1 << _STROBE_IO);
+  sendOneByte(value);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
+  PORTD |= B00010000;//PORTD |= 1 << _STROBE_IO;
 }
 
 void TM1638plus::reset() {
   sendCommand(WRITE_INC); // set auto increment mode
-  digitalWrite(_STROBE_IO, LOW);
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, SEG_ADR);   // set starting address to 0
+  PORTD &= B11101111;//PORTD &= ~(1 << _STROBE_IO);
+  sendOneByte(SEG_ADR);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, SEG_ADR);   // set starting address to 0
   for (uint8_t i = 0; i < 16; i++)
   {
-    shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, 0x00);
+      sendOneByte(0x00);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, 0x00);
   }
-   digitalWrite(_STROBE_IO, HIGH);
+  PORTD |= B00010000;//PORTD |= 1 << _STROBE_IO;
 }
 
 void TM1638plus::setLED(uint8_t position, uint8_t value)
 {
-  pinMode(_DATA_IO, OUTPUT);
+  DDRD |= 0b10000000;//pinMode(_DATA_IO, OUTPUT);
+  PORTD &= 0b01111111;
   sendCommand(WRITE_LOC);
-  digitalWrite(_STROBE_IO, LOW);
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, LEDS_ADR + (position << 1));
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
-  digitalWrite(_STROBE_IO, HIGH);
+  PORTD &= B11101111;//PORTD &= ~(1 << _STROBE_IO);
+  sendOneByte(LEDS_ADR + (position << 1));//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, LEDS_ADR + (position << 1));
+  sendOneByte(value);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
+  PORTD |= B00010000;//PORTD |= 1 << _STROBE_IO;
 }
 
 void TM1638plus::displayIntNum(unsigned long number, boolean leadingZeros)
@@ -100,10 +99,10 @@ void TM1638plus::displayASCIIwDot(uint8_t position, uint8_t ascii) {
 
 void TM1638plus::display7Seg(uint8_t position, uint8_t value) { // call 7-segment
   sendCommand(WRITE_LOC);
-  digitalWrite(_STROBE_IO, LOW);
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, SEG_ADR + (position << 1));
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
-  digitalWrite(_STROBE_IO, HIGH); 
+  PORTD &= B11101111;//PORTD &= ~(1 << _STROBE_IO);
+  sendOneByte(SEG_ADR + (position << 1));//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, SEG_ADR + (position << 1));
+  sendOneByte(value);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
+  PORTD |= B00010000;//PORTD |= 1 << _STROBE_IO;
 }
 
 
@@ -139,9 +138,10 @@ void TM1638plus::displayHex(uint8_t position, uint8_t hex)
 uint8_t TM1638plus::readButtons()
 {
   uint8_t buttons = 0;
-  digitalWrite(_STROBE_IO, LOW);
-  shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, BUTTONS_MODE);
-  pinMode(_DATA_IO, INPUT);  
+  PORTD &= B11101111;//PORTD &= ~(1 << _STROBE_IO);
+  sendOneByte(BUTTONS_MODE);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, BUTTONS_MODE);
+  DDRD &= 0b01111111;//pinMode(_DATA_IO, INPUT); 
+  PORTD &= 0b01111111;  
 
   for (uint8_t i = 0; i < 4; i++)
   {
@@ -149,8 +149,9 @@ uint8_t TM1638plus::readButtons()
     buttons |= v;
   }
 
-  pinMode(_DATA_IO, OUTPUT);
-  digitalWrite(_STROBE_IO, HIGH); 
+  DDRD |= 0b10000000;//pinMode(_DATA_IO, OUTPUT);
+  PORTD &= 0b01111111;
+  PORTD |= B00010000;//PORTD |= 1 << _STROBE_IO;
   return buttons;
 }
 
@@ -159,7 +160,23 @@ void TM1638plus::brightness(uint8_t brightness)
 {
     uint8_t  value = 0;
     value = BRIGHT_ADR + (BRIGHT_MASK & brightness);
-    digitalWrite(_STROBE_IO, LOW); 
-    shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
-     digitalWrite(_STROBE_IO, HIGH); 
+    PORTD &= B11101111;//PORTD &= ~(1 << _STROBE_IO);
+    sendOneByte(value);//shiftOut(_DATA_IO, _CLOCK_IO, LSBFIRST, value);
+    PORTD |= B00010000;//PORTD |= 1 << _STROBE_IO;
 }
+
+void TM1638plus::sendOneByte(uint8_t by_te) {
+	//6 - clock
+	//7-dio
+	for (uint8_t i = 0; i < 8; i++) {
+		if ((1 << i) & by_te) {
+			PORTD |= (1 << 7);//DIO - 1.
+		} else {
+			PORTD &= ~(1 << 7);//DIO - 0.
+		}
+		PORTD |= 0b01000000;//Clock - 1.
+		PORTD &= 0b10111111;//Clock - 0.
+	} 
+	
+}
+

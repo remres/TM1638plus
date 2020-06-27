@@ -93,6 +93,9 @@ public:
 	//and leading zeros optional
 	void DisplayDecNumNibble(uint16_t numberUpper, uint16_t numberLower, boolean leadingZeros = true);
 	
+	//
+	void sendOneByte(uint8_t by_te);
+	
 private:
 		uint8_t _STROBE_IO;
 		uint8_t _DATA_IO;
